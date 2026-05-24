@@ -69,7 +69,7 @@ pipeline {
             steps {
 
                 sh '''
-                docker build -t $IMAGE_NAME:latest ./app
+                docker build -t $IMAGE_NAME:$BUILD_NUMBER ./app
                 '''
 
             }
@@ -107,40 +107,37 @@ pipeline {
             steps {
 
                 sh '''
-                docker push $IMAGE_NAME:latest
+                docker push $IMAGE_NAME:$BUILD_NUMBER
                 '''
 
             }
         }
 
         stage('Update GitOps Repository') {
-            steps {
+    steps {
 
-                dir('gitops') {
+        dir('gitops') {
 
-                    git(
-                        branch: 'main',
-                        url: 'git@github.com:amalantonypulikkottil/enterprise-k8s-manifests.git',
-                        credentialsId: 'github-ssh'
-                    )
+            git(
+                branch: 'main',
+                url: 'git@github.com:amalantonypulikkottil/enterprise-k8s-manifests.git',
+                credentialsId: 'github-ssh'
+            )
 
-                    sh '''
-                    sed -i 's|image:.*|image: amalantonypulikkottil/enterprise-node-app:latest|g' deployment.yaml
+            sh """
+            sed -i 's|image:.*|image: amalantonypulikkottil/enterprise-node-app:${BUILD_NUMBER}|g' deployment.yaml
 
-                    git config user.email "jenkins@devops.com"
-                    git config user.name "Jenkins"
+            git config user.email "jenkins@devops.com"
+            git config user.name "Jenkins"
 
-                    git add .
-                    git commit -m "Updated image version"
+            git add .
+            git commit -m "Updated image to build ${BUILD_NUMBER}"
 
-                    git push origin main
-                    '''
-
-                }
-
-            }
+            git push origin main
+            """
         }
-
+    }
+}
         stage('Cleanup Old Docker Images') {
             steps {
 

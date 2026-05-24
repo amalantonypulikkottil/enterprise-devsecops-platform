@@ -11,7 +11,7 @@ pipeline {
         stage('Clone Code') {
             steps {
                 git branch: 'main',
-                url: 'YOUR_GITHUB_REPO'
+                url: 'https://github.com/amalantonypulikkottil/enterprise-devsecops-platform.git'
             }
         }
 

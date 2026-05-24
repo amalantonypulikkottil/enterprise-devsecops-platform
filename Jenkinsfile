@@ -11,14 +11,11 @@ pipeline {
 
         IMAGE_NAME = "amalantonypulikkottil/enterprise-node-app"
 
-        KUBERNETES_DEPLOYMENT = "enterprise-node-app"
-
-        KUBERNETES_SERVICE = "enterprise-node-service"
     }
 
     stages {
 
-        stage('Checkout Code') {
+        stage('Checkout Application Code') {
             steps {
 
                 git(
@@ -116,59 +113,30 @@ pipeline {
             }
         }
 
-        stage('Deploy to Kubernetes') {
+        stage('Update GitOps Repository') {
             steps {
 
-                sh '''
-                kubectl apply -f k8s/
-                '''
+                dir('gitops') {
 
-            }
-        }
+                    git(
+                        branch: 'main',
+                        url: 'git@github.com:amalantonypulikkottil/enterprise-k8s-manifests.git',
+                        credentialsId: 'github-ssh'
+                    )
 
-        stage('Restart Kubernetes Deployment') {
-            steps {
+                    sh '''
+                    sed -i 's|image:.*|image: amalantonypulikkottil/enterprise-node-app:latest|g' deployment.yaml
 
-                sh '''
-                kubectl rollout restart deployment $KUBERNETES_DEPLOYMENT
-                '''
+                    git config user.email "jenkins@devops.com"
+                    git config user.name "Jenkins"
 
-            }
-        }
+                    git add .
+                    git commit -m "Updated image version"
 
-        stage('Wait For Kubernetes Deployment') {
-            steps {
+                    git push origin main
+                    '''
 
-                sh '''
-                kubectl rollout status deployment $KUBERNETES_DEPLOYMENT --timeout=120s
-                '''
-
-            }
-        }
-
-        stage('Verify Kubernetes Resources') {
-            steps {
-
-                sh '''
-                echo "========== PODS =========="
-                kubectl get pods -o wide
-
-                echo "========== SERVICES =========="
-                kubectl get svc
-
-                echo "========== DEPLOYMENTS =========="
-                kubectl get deployments
-                '''
-
-            }
-        }
-
-        stage('Application Health Check') {
-            steps {
-
-                sh '''
-                kubectl get pods
-                '''
+                }
 
             }
         }
@@ -190,8 +158,8 @@ pipeline {
         success {
 
             echo '========================================='
-            echo 'Enterprise Kubernetes DevSecOps SUCCESS'
-            echo 'Application deployed to Kubernetes'
+            echo 'Enterprise GitOps DevSecOps SUCCESS'
+            echo 'ArgoCD will deploy automatically'
             echo '========================================='
 
         }
@@ -199,7 +167,7 @@ pipeline {
         failure {
 
             echo '========================================='
-            echo 'Enterprise Kubernetes DevSecOps FAILED'
+            echo 'Enterprise GitOps DevSecOps FAILED'
             echo 'Check Jenkins logs immediately'
             echo '========================================='
 
@@ -208,11 +176,7 @@ pipeline {
         always {
 
             sh '''
-            echo "========== FINAL POD STATUS =========="
-            kubectl get pods -o wide
-
-            echo "========== FINAL SERVICE STATUS =========="
-            kubectl get svc
+            docker images
             '''
 
         }

@@ -8,27 +8,39 @@ pipeline {
     }
 
     environment {
+
         IMAGE_NAME = "amalantonypulikkottil/enterprise-node-app"
-        CONTAINER_NAME = "enterprise-container"
+
+        KUBERNETES_DEPLOYMENT = "enterprise-node-app"
+
+        KUBERNETES_SERVICE = "enterprise-node-service"
     }
 
     stages {
 
         stage('Checkout Code') {
             steps {
+
                 git(
                     branch: 'main',
                     url: 'git@github.com:amalantonypulikkottil/enterprise-devsecops-platform.git',
                     credentialsId: 'github-ssh'
                 )
+
             }
         }
 
         stage('Install Dependencies') {
             steps {
+
                 dir('app') {
-                    sh 'npm install'
+
+                    sh '''
+                    npm install
+                    '''
+
                 }
+
             }
         }
 
@@ -49,24 +61,30 @@ pipeline {
                         -Dsonar.host.url=http://40.192.39.77:9000 \
                         -Dsonar.login=$SONAR_TOKEN
                         '''
+
                     }
                 }
+
             }
         }
 
         stage('Build Docker Image') {
             steps {
+
                 sh '''
-                docker build -t $IMAGE_NAME ./app
+                docker build -t $IMAGE_NAME:latest ./app
                 '''
+
             }
         }
 
         stage('Trivy Security Scan') {
             steps {
+
                 sh '''
-                trivy image --severity HIGH,CRITICAL $IMAGE_NAME
+                trivy image --severity HIGH,CRITICAL $IMAGE_NAME:latest
                 '''
+
             }
         }
 
@@ -82,52 +100,86 @@ pipeline {
                     sh '''
                     echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
                     '''
+
                 }
+
             }
         }
 
         stage('Push Docker Image') {
             steps {
+
                 sh '''
-                docker push $IMAGE_NAME
+                docker push $IMAGE_NAME:latest
                 '''
+
             }
         }
 
-        stage('Stop Old Container') {
+        stage('Deploy to Kubernetes') {
             steps {
+
                 sh '''
-                docker stop $CONTAINER_NAME || true
-                docker rm $CONTAINER_NAME || true
+                kubectl apply -f k8s/
                 '''
+
             }
         }
 
-        stage('Deploy New Container') {
+        stage('Restart Kubernetes Deployment') {
             steps {
+
                 sh '''
-                docker run -d \
-                --name $CONTAINER_NAME \
-                -p 3000:3000 \
-                $IMAGE_NAME
+                kubectl rollout restart deployment $KUBERNETES_DEPLOYMENT
                 '''
+
+            }
+        }
+
+        stage('Wait For Kubernetes Deployment') {
+            steps {
+
+                sh '''
+                kubectl rollout status deployment $KUBERNETES_DEPLOYMENT --timeout=120s
+                '''
+
+            }
+        }
+
+        stage('Verify Kubernetes Resources') {
+            steps {
+
+                sh '''
+                echo "========== PODS =========="
+                kubectl get pods -o wide
+
+                echo "========== SERVICES =========="
+                kubectl get svc
+
+                echo "========== DEPLOYMENTS =========="
+                kubectl get deployments
+                '''
+
             }
         }
 
         stage('Application Health Check') {
             steps {
+
                 sh '''
-                sleep 10
-                curl -f http://localhost:3000 || exit 1
+                kubectl get pods
                 '''
+
             }
         }
 
         stage('Cleanup Old Docker Images') {
             steps {
+
                 sh '''
                 docker image prune -af
                 '''
+
             }
         }
 
@@ -136,21 +188,33 @@ pipeline {
     post {
 
         success {
+
             echo '========================================='
-            echo 'Enterprise DevSecOps Pipeline SUCCESS'
-            echo 'Application deployed successfully'
+            echo 'Enterprise Kubernetes DevSecOps SUCCESS'
+            echo 'Application deployed to Kubernetes'
             echo '========================================='
+
         }
 
         failure {
+
             echo '========================================='
-            echo 'Enterprise DevSecOps Pipeline FAILED'
+            echo 'Enterprise Kubernetes DevSecOps FAILED'
             echo 'Check Jenkins logs immediately'
             echo '========================================='
+
         }
 
         always {
-            sh 'docker ps -a'
+
+            sh '''
+            echo "========== FINAL POD STATUS =========="
+            kubectl get pods -o wide
+
+            echo "========== FINAL SERVICE STATUS =========="
+            kubectl get svc
+            '''
+
         }
     }
 }

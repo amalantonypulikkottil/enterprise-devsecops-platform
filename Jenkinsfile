@@ -7,11 +7,11 @@ pipeline {
     }
 
     stages {
-
         stage('Clone Code') {
             steps {
                 git branch: 'main',
-                url: 'https://github.com/amalantonypulikkottil/enterprise-devsecops-platform.git'
+                    url: 'git@github.com:amalantonypulikkottil/enterprise-devsecops-platform.git',
+                    credentialsId: 'github-ssh'
             }
         }
 
@@ -40,16 +40,14 @@ pipeline {
                 '''
             }
         }
-
     }
 
     post {
         success {
-            echo 'Pipeline executed successfully!'
+            echo '✅ Pipeline executed successfully!'
         }
-
         failure {
-            echo 'Pipeline failed!'
+            echo '❌ Pipeline failed!'
         }
     }
 }
